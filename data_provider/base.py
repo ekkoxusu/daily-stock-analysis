@@ -1869,6 +1869,17 @@ class DataFetcherManager:
         else:
             logger.debug("[data source init] skip MiaoxiangFetcher because MX_APIKEY is not configured")
 
+        asharehub_api_key = getattr(config, "asharehub_api_key", None)
+        if not isinstance(asharehub_api_key, str):
+            asharehub_api_key = ""
+        asharehub_api_key = asharehub_api_key.strip()
+        if asharehub_api_key:
+            from .asharehub_fetcher import AshareHubFetcher
+
+            optional_fetchers.append(AshareHubFetcher(api_key=asharehub_api_key))
+        else:
+            logger.debug("[data source init] skip AshareHubFetcher because ASHAREHUB_API_KEY is not configured")
+
         if LongbridgeFetcher.has_configured_credentials(config):
             optional_fetchers.append(LongbridgeFetcher())  # 长桥（美股/港股兜底，懒加载）
         else:
