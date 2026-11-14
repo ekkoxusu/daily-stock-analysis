@@ -13,6 +13,7 @@ AShareHub 数据源（当前仅用于筹码分布）
 
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import pandas as pd
@@ -38,7 +39,10 @@ class AshareHubFetcher(BaseFetcher):
     priority = int(os.getenv("ASHAREHUB_PRIORITY", "2"))
     allow_empty_daily_data = True
 
+    capital_flow_markets = {"cn"}
+
     CHIP_ENDPOINT = "/v2/chips/distribution"
+    FLOW_ENDPOINT = "/v2/flows/moneyflow"
     DEFAULT_BASE_URL = "https://asharehub.com"
 
     def __init__(self, api_key: str, priority: Optional[int] = None, timeout: int = 15) -> None:
@@ -153,3 +157,90 @@ class AshareHubFetcher(BaseFetcher):
             f"70%集中度={chip.concentration_70:.2%} (来源: AshareHub)"
         )
         return chip
+
+    # ---------------------------------------------------------------- 资金流
+
+    def _get_json(self, endpoint: str, params: dict) -> Optional[Any]:
+        if not self.is_available():
+            return None
+        try:
+            resp = self._session.get(
+                f"{self._base_url}{endpoint}",
+                params=params,
+                headers={"X-API-Key": self._api_key},
+                timeout=self._timeout,
+            )
+        except Exception as exc:
+            logger.warning(f"[AshareHub] 请求 {endpoint} 失败: {exc}")
+            return None
+        if resp.status_code == 429:
+            logger.warning("[AshareHub] 超出每日调用额度(429)，本日不再尝试")
+            self._api_key = ""
+            return None
+        if resp.status_code != 200:
+            logger.warning(f"[AshareHub] {endpoint} 返回 {resp.status_code}: {resp.text[:120]}")
+            return None
+        try:
+            return resp.json()
+        except Exception as exc:
+            logger.warning(f"[AshareHub] {endpoint} 响应解析失败: {exc}")
+            return None
+
+    def get_capital_flow(self, stock_code: str, top_n: int = 5) -> dict:
+        """个股资金流：主力净流入（大单+特大单）与近 5/10 日合计。
+
+        返回结构与 AkshareFundamentalAdapter.get_capital_flow 同构，
+        由 DataFetcherManager._supplement_capital_flow_from_fetchers 消费。
+        """
+        result: dict = {
+            "status": "not_supported",
+            "stock_flow": {},
+            "sector_rankings": {"top": [], "bottom": []},
+            "source_chain": [],
+            "errors": [],
+        }
+        symbol = self._to_symbol(stock_code)
+        if not symbol:
+            return result
+
+        today = datetime.now()
+        start = (today - timedelta(days=30)).strftime("%Y%m%d")
+        end = today.strftime("%Y%m%d")
+        rows = self._get_json(
+            self.FLOW_ENDPOINT,
+            {"symbol": symbol, "start_date": start, "end_date": end},
+        )
+        if not isinstance(rows, list) or not rows:
+            result["errors"].append("asharehub: empty moneyflow")
+            return result
+
+        rows = sorted(rows, key=lambda r: str(r.get("trade_date", "")), reverse=True)
+
+        def _main_net_yuan(row: dict) -> Optional[float]:
+            buy = safe_float(row.get("buy_lg_amount")) + safe_float(row.get("buy_elg_amount"))
+            sell = safe_float(row.get("sell_lg_amount")) + safe_float(row.get("sell_elg_amount"))
+            if buy == 0 and sell == 0:
+                return None
+            return (buy - sell) * 10000.0  # 万元 -> 元
+
+        series = [value for value in (_main_net_yuan(row) for row in rows) if value is not None]
+        if not series:
+            result["errors"].append("asharehub: no main net inflow")
+            return result
+
+        def _sum(limit: int) -> Optional[float]:
+            window = series[:limit]
+            return round(sum(window), 2) if window else None
+
+        result["status"] = "success"
+        result["stock_flow"] = {
+            "main_net_inflow": round(series[0], 2),
+            "inflow_5d": _sum(5),
+            "inflow_10d": _sum(10),
+        }
+        result["source_chain"].append("asharehub:moneyflow")
+        logger.info(
+            f"[资金流] {symbol} 主力净流入={series[0] / 1e8:.2f}亿 "
+            f"5日={(_sum(5) or 0) / 1e8:.2f}亿 10日={(_sum(10) or 0) / 1e8:.2f}亿 (来源: AshareHub)"
+        )
+        return result
