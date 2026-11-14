@@ -2013,7 +2013,7 @@ class StockAnalysisPipeline:
 
         def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
             normalized: Dict[str, Any] = {"code": row.get("code") or code}
-            for key in ("open", "high", "low", "close", "volume", "amount", "pct_chg", "ma5", "ma10", "ma20", "volume_ratio"):
+            for key in ("open", "high", "low", "close", "volume", "amount", "pct_chg", "ma5", "ma10", "ma20", "atr14", "volume_ratio"):
                 value = row.get(key)
                 if pd.notna(value):
                     normalized[key] = float(value)
