@@ -591,6 +591,18 @@ class BaseFetcher(ABC):
         df['ma5'] = df['close'].rolling(window=5, min_periods=1).mean()
         df['ma10'] = df['close'].rolling(window=10, min_periods=1).mean()
         df['ma20'] = df['close'].rolling(window=20, min_periods=1).mean()
+
+        # ATR14（真实波幅均值）：止损距离与仓位计算的波动率基准
+        prev_close = df['close'].shift(1)
+        true_range = pd.concat(
+            [
+                df['high'] - df['low'],
+                (df['high'] - prev_close).abs(),
+                (df['low'] - prev_close).abs(),
+            ],
+            axis=1,
+        ).max(axis=1)
+        df['atr14'] = true_range.rolling(window=14, min_periods=1).mean()
         
         # 量比：当日成交量 / 5日平均成交量
         # 注意：此处的 volume_ratio 是“日线成交量 / 前5日均量(shift 1)”的相对倍数，
@@ -601,6 +613,9 @@ class BaseFetcher(ABC):
         df['volume_ratio'] = df['volume_ratio'].fillna(1.0)
         
         # 保留2位小数
+        if 'atr14' in df.columns:
+            df['atr14'] = df['atr14'].round(3)
+
         for col in ['ma5', 'ma10', 'ma20', 'volume_ratio']:
             if col in df.columns:
                 df[col] = df[col].round(2)
