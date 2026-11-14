@@ -2145,7 +2145,8 @@ class GeminiAnalyzer:
 - 只有在跌破关键支撑、主力资金持续流出或风险显著放大时，才能给出卖出/减仓。
 - 必须输出 `dashboard.phase_decision` 七字段；盘中/午休/临近收盘要给出当前动作、观察条件和下一次检查点。
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
-- 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。"""
+- 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。
+- 止损位必须与波动率挂钩：与入场价的距离取 max(1.5×ATR14, 2%)，不得使用固定百分比或单一均线距离；若该距离超过目标位涨幅的 1/2（风险回报比 < 2:1），不得给出买入或加仓建议。"""
 
     SYSTEM_PROMPT = """你是一位{market_placeholder}投资分析师，负责生成专业的【决策仪表盘】分析报告。
 
@@ -2331,7 +2332,8 @@ class GeminiAnalyzer:
 - 只有在跌破关键支撑、主力资金持续流出或风险显著放大时，才能给出卖出/减仓。
 - 必须输出 `dashboard.phase_decision` 七字段；盘中/午休/临近收盘要给出当前动作、观察条件和下一次检查点。
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
-- 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。"""
+- 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。
+- 止损位必须与波动率挂钩：与入场价的距离取 max(1.5×ATR14, 2%)，不得使用固定百分比或单一均线距离；若该距离超过目标位涨幅的 1/2（风险回报比 < 2:1），不得给出买入或加仓建议。"""
 
     # English templates (REPORT_LANGUAGE=en/ko). They mirror LEGACY_DEFAULT_SYSTEM_PROMPT /
     # SYSTEM_PROMPT section by section so smaller models are not biased toward Chinese output
@@ -4480,6 +4482,7 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
 | MA5 | {today.get('ma5', 'N/A')} | Short-term trend line |
 | MA10 | {today.get('ma10', 'N/A')} | Short-to-medium-term trend line |
 | MA20 | {today.get('ma20', 'N/A')} | Medium-term trend line |
+| ATR14 | {today.get('atr14', 'N/A')} | Average true range, stop-loss distance baseline |
 | MA Pattern | {context.get('ma_status', unknown_text)} | Bullish/Bearish/Tangled |
 """
         else:
@@ -4498,6 +4501,7 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
 | MA5 | {today.get('ma5', 'N/A')} | 短期趋势线 |
 | MA10 | {today.get('ma10', 'N/A')} | 中短期趋势线 |
 | MA20 | {today.get('ma20', 'N/A')} | 中期趋势线 |
+| ATR14 | {today.get('atr14', 'N/A')} | 真实波幅均值，止损距离基准 |
 | 均线形态 | {context.get('ma_status', unknown_text)} | 多头/空头/缠绕 |
 """
         
