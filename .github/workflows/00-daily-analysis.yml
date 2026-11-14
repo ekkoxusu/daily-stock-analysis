@@ -336,7 +336,8 @@ jobs:
           SEARXNG_TIMEOUT_SECONDS: ${{ vars.SEARXNG_TIMEOUT_SECONDS || secrets.SEARXNG_TIMEOUT_SECONDS }}
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
           MX_PRIORITY: ${{ vars.MX_PRIORITY || secrets.MX_PRIORITY }}
-          
+          ASHAREHUB_API_KEY: ${{ secrets.ASHAREHUB_API_KEY }}   # ← 新增这行，缩进 10 个空格
+
           # ==========================================
           # 通知渠道（可同时配置多个，全部推送）
           # ==========================================
